@@ -20,19 +20,17 @@ type Req struct {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
 }
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/points", func(w http.ResponseWriter, r *http.Request) {
-		//if r.Method != http.MethodGet {
-		//	http.Error(w, "Only `Get` method allowed", http.StatusMethodNotAllowed)
-		//	return
-		//}
 
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeFile(w, r, "./index.html")
+	})
+
+	mux.HandleFunc("/api/points", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Printf("websocket upgrade failed: %v", err)
@@ -86,11 +84,6 @@ func main() {
 				_ = conn.WriteJSON(g.GetNthGeneration(int(n)))
 			}
 		}
-	})
-
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		http.ServeFile(w, r, "./index.html")
 	})
 
 	log.Fatal(http.ListenAndServe(":8080", mux))
