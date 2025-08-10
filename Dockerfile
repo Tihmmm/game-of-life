@@ -4,10 +4,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 FROM dependencies AS build
-COPY backend ./
-RUN CGO_ENABLED=0 go build -o /gol-backend -ldflags="-w -s" ./cmd/app/
+COPY . ./
+RUN CGO_ENABLED=0 go build -o /gol -ldflags="-w -s" ./cmd/app/
 
 FROM tihmmm/golang-alpine-rootless:go-1.22.0-alp-3.19
-COPY --chown=user:user --chmod=550 --from=build /gol-backend /home/user/gol-backend
+COPY --chown=user:user --chmod=550 --from=build /gol /home/user/gol
+COPY --chown=user:user --chmod=550 --from=build /index.html /home/user/index.html
 WORKDIR /home/user/
-CMD ["./gol-backend"]
+CMD ["./gol"]
