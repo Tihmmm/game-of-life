@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title><!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Conway's Game of Life – Frontend</title>
+    <style>
+        :root { --bg:#0f1115; --panel:#171923; --muted:#9aa4b2; --accent:#4f46e5; --danger:#ef4444; --ok:#10b981; }
+        *{box-sizing:border-box}
+        body{margin:0;background:var(--bg);color:#e5e7eb;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+        .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+        .card{background:var(--panel);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);padding:16px}
+        .grid{display:grid;gap:12px}
+        .grid.cols-2{grid-template-columns:1fr 1fr}
+        label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+        input[type="number"], input[type="text"], textarea{width:100%;padding:10px 12px;border:1px solid #2a2f3a;background:#0b0e14;color:#e5e7eb;border-radius:10px}
+        textarea{min-height:120px;resize:vertical}
+        .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+        .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer;background:#24293a;color:#e5e7eb}
+        .btn.primary{background:var(--accent)}
+        .btn.ghost{background:transparent;border:1px solid #2b3040}
+        .btn.success{background:var(--ok)}
+        .btn.danger{background:var(--danger)}
+        .btn:disabled{opacity:.5;cursor:not-allowed}
+        .tag{font-size:12px;color:#cbd5e1;background:#11141b;border:1px solid #2b3040;border-radius:999px;padding:4px 10px;white-space:nowrap}
+        .status{display:flex;gap:8px;align-items:center}
+        .status-dot{width:10px;height:10px;border-radius:50%}
+        .status-dot.ok{background:var(--ok)}
+        .status-dot.err{background:var(--danger)}
+        canvas{background:#0b0e14;border-radius:14px;display:block;width:100%;height:auto;border:1px solid #2a2f3a}
+        .controls{display:flex;flex-wrap:wrap;gap:10px}
+        .spacer{flex:1}
+        .kbd{border:1px solid #2b3040;border-bottom-width:3px;border-radius:8px;padding:2px 6px;font-size:12px;color:#e5e7eb;background:#0b0e14}
+        .hint{color:#94a3b8;font-size:12px}
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1 style="margin:0 0 12px">Conway's Game of Life – Frontend</h1>
+
+    <div class="card" id="configCard">
+        <div class="grid cols-2">
+            <div>
+                <label for="gridX">Grid width (X)</label>
+                <input id="gridX" type="number" min="3" max="2000" value="50" />
+            </div>
+            <div>
+                <label for="gridY">Grid height (Y)</label>
+                <input id="gridY" type="number" min="3" max="2000" value="30" />
+            </div>
+        </div>
+
+        <div style="margin-top:12px" class="row">
+            <label style="margin:0" class="row"><input id="provideInit" type="checkbox" />&nbsp;Provide initial grid</label>
+            <span class="hint">If unchecked, backend should randomize.</span>
+        </div>
+
+        <div id="initEditor" style="display:none;margin-top:12px">
+            <div class="row">
+                <button class="btn ghost" id="clearInit">Clear</button>
+                <button class="btn ghost" id="invertInit">Invert</button>
+                <span class="spacer"></span>
+                <span class="hint">Click on the grid to toggle live cells.</span>
+            </div>
+            <div style="margin-top:8px">
+                <canvas id="initCanvas"></canvas>
+            </div>
+            <details style="margin-top:10px">
+                <summary>Or paste coordinates (one x,y per line)</summary>
+                <textarea id="coordsTextarea" placeholder="Example:\n3,4\n4,4\n5,4"></textarea>
+            </details>
+        </div>
+
+        <div class="row" style="margin-top:14px">
+            <button class="btn primary" id="startBtn">Start</button>
+            <span class="status" id="wsStatus" aria-live="polite"><span class="status-dot err"></span><span>Disconnected</span></span>
+            <span class="spacer"></span>
+            <span class="tag" id="genTag">Gen: –</span>
+            <span class="tag" id="sizeTag">Size: –</span>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+        <div class="row">
+            <div class="controls">
+                <button class="btn success" id="playBtn" disabled>Play</button>
+                <button class="btn" id="pauseBtn" disabled>Pause</button>
+                <button class="btn" id="prevBtn" disabled>Prev</button>
+                <button class="btn" id="nextBtn" disabled>Next</button>
+                <span class="spacer"></span>
+                <label>Speed (ms): <input id="speedInput" type="number" min="50" step="10" value="250" style="width:100px"></label>
+                <span class="spacer"></span>
+                <label>Go to N: <input id="gotoInput" type="number" min="1" value="1" style="width:100px"> <button class="btn ghost" id="gotoBtn" disabled>Go</button></label>
+            </div>
+        </div>
+        <div style="margin-top:12px">
+            <canvas id="boardCanvas"></canvas>
+        </div>
+    </div>
+
+    <p class="hint">Notes:
+        <br>• This UI tries <span class="kbd">POST /api/points</span> first. If the backend rejects it, it falls back to initializing over WebSocket <span class="kbd">GET /api/points</span> and sending the init JSON as the first WS message.
+        <br>• Messages sent over WS: <span class="kbd">"next"</span> for next generation; an integer <span class="kbd">"N"</span> to request the Nth generation from the backend if it exists server-side.
+        <br>• Frontend keeps a cache of the last 100 generations; <span class="kbd">Prev</span> and <span class="kbd">Go</span> use the cache when possible.
+    </p>
+</div>
+
+<script>
+    // ---------- State ----------
+    const state = {
+        gridX: 50,
+        gridY: 30,
+        cellPx: 18,               // base cell size; dynamic fit below
+        dpr: window.devicePixelRatio || 1,
+        ws: null,
+        running: false,           // auto-play
+        timer: null,
+        speedMs: 250,
+        // Cache: Map<genNumber (1-based), points[]>
+        cache: new Map(),
+        cacheOrder: [],           // queue of gen numbers to enforce size <= 100
+        maxCache: 100,
+        currentGen: 0,            // 1-based; 0 means not started
+        latestGen: 0,             // highest known gen number
+        requestedPending: false,  // waiting for server response
+    };
+
+    // ---------- DOM ----------
+    const gridXEl = document.getElementById('gridX');
+    const gridYEl = document.getElementById('gridY');
+    const provideInitEl = document.getElementById('provideInit');
+    const initEditorEl = document.getElementById('initEditor');
+    const initCanvas = document.getElementById('initCanvas');
+    const coordsTextarea = document.getElementById('coordsTextarea');
+    const clearInitBtn = document.getElementById('clearInit');
+    const invertInitBtn = document.getElementById('invertInit');
+
+    const startBtn = document.getElementById('startBtn');
+    const wsStatus = document.getElementById('wsStatus');
+    const genTag = document.getElementById('genTag');
+    const sizeTag = document.getElementById('sizeTag');
+
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const speedInput = document.getElementById('speedInput');
+    const gotoInput = document.getElementById('gotoInput');
+    const gotoBtn = document.getElementById('gotoBtn');
+
+    const boardCanvas = document.getElementById('boardCanvas');
+
+    // ---------- Helpers ----------
+    function setStatus(connected) {
+        const dot = wsStatus.querySelector('.status-dot');
+        const txt = wsStatus.querySelector('span:nth-child(2)');
+        if (connected) {
+            dot.classList.remove('err'); dot.classList.add('ok');
+            txt.textContent = 'Connected';
+        } else {
+            dot.classList.remove('ok'); dot.classList.add('err');
+            txt.textContent = 'Disconnected';
+        }
+    }
+
+    function fitCanvasToGrid(canvas, gridX, gridY, forEditor=false) {
+        // Compute cell size so full grid fits nicely in 1000px width area
+        const maxW = document.querySelector('.wrap').clientWidth - 48; // padding
+        const targetW = Math.min(maxW, 1000);
+        const cell = Math.floor(targetW / gridX);
+        const cellPx = Math.max(4, Math.min(24, cell));
+        const w = gridX * cellPx;
+        const h = gridY * cellPx;
+        const dpr = state.dpr;
+        canvas.width = w * dpr; canvas.height = h * dpr;
+        canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (!forEditor) state.cellPx = cellPx;
+    }
+
+    function drawPoints(canvas, gridX, gridY, points) {
+        const ctx = canvas.getContext('2d');
+        const c = state.cellPx;
+        // clear
+        ctx.fillStyle = '#0b0e14';
+        ctx.fillRect(0,0,canvas.width/state.dpr, canvas.height/state.dpr);
+        // draw alive cells
+        ctx.fillStyle = '#e5e7eb';
+        for (const p of points) {
+            const x = p.X ?? p.x; // accept either
+            const y = p.Y ?? p.y;
+            if (x==null || y==null) continue;
+            if (x<0||y<0||x>=gridX||y>=gridY) continue;
+            ctx.fillRect(x*c, y*c, c, c);
+        }
+    }
+
+    function parsePointsFromTextarea() {
+        const lines = coordsTextarea.value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+        const pts = [];
+        for (const line of lines) {
+            const m = line.match(/^\s*(\d+)\s*,\s*(\d+)\s*$/);
+            if (m) pts.push({X: parseInt(m[1],10), Y: parseInt(m[2],10)});
+        }
+        return pts;
+    }
+
+    function togglePointInEditor(x, y) {
+        const key = `${x},${y}`;
+        if (!initEditorEl._points) initEditorEl._points = new Set();
+        if (initEditorEl._points.has(key)) initEditorEl._points.delete(key); else initEditorEl._points.add(key);
+        // sync textarea (optional, not 1:1 performant for large)
+        const arr = Array.from(initEditorEl._points).map(s=>({X:+s.split(',')[0], Y:+s.split(',')[1]}));
+        coordsTextarea.value = arr.map(p=>`${p.X},${p.Y}`).join('\n');
+        drawPoints(initCanvas, state.gridX, state.gridY, arr);
+    }
+
+    function getInitialPoints() {
+        if (!provideInitEl.checked) return [];
+        // Prefer textarea if not empty, else use editor set
+        const tpts = parsePointsFromTextarea();
+        if (tpts.length) return tpts;
+        const set = initEditorEl._points || new Set();
+        return Array.from(set).map(s=>({X:+s.split(',')[0], Y:+s.split(',')[1]}));
+    }
+
+    function setButtonsEnabled(enabled) {
+        playBtn.disabled = !enabled;
+        pauseBtn.disabled = !enabled;
+        prevBtn.disabled = !enabled;
+        nextBtn.disabled = !enabled;
+        gotoBtn.disabled = !enabled;
+    }
+
+    function updateBadges() {
+        genTag.textContent = `Gen: ${state.currentGen || '–'}`;
+        sizeTag.textContent = `Size: ${state.gridX}×${state.gridY}`;
+    }
+
+    function cachePut(gen, points) {
+        if (!Number.isInteger(gen) || gen < 1) return;
+        if (!state.cache.has(gen)) state.cacheOrder.push(gen);
+        state.cache.set(gen, points);
+        while (state.cacheOrder.length > state.maxCache) {
+            const drop = state.cacheOrder.shift();
+            state.cache.delete(drop);
+        }
+    }
+
+    function requestNext() {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        if (state.requestedPending) return;
+        state.requestedPending = true;
+        state.ws.send('next');
+    }
+
+    function requestNth(gen) {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        state.requestedPending = true;
+        state.ws.send(String(gen));
+    }
+
+    function showGeneration(gen) {
+        const points = state.cache.get(gen);
+        if (!points) return false;
+        state.currentGen = gen;
+        drawPoints(boardCanvas, state.gridX, state.gridY, points);
+        updateBadges();
+        return true;
+    }
+
+    function startAutoplay() {
+        if (state.timer) clearInterval(state.timer);
+        state.running = true;
+        state.timer = setInterval(()=>{
+            if (!state.running) return;
+            requestNext();
+        }, Math.max(50, Number(speedInput.value)||state.speedMs));
+        playBtn.disabled = true; pauseBtn.disabled = false;
+    }
+
+    function pauseAutoplay() {
+        state.running = false;
+        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+        playBtn.disabled = false; pauseBtn.disabled = true;
+    }
+
+    function resetStateForNewSession() {
+        state.cache.clear(); state.cacheOrder = [];
+        state.currentGen = 0; state.latestGen = 0; state.requestedPending = false;
+        pauseAutoplay();
+        setButtonsEnabled(false);
+        drawPoints(boardCanvas, state.gridX, state.gridY, []);
+        updateBadges();
+    }
+
+    // ---------- Init editor ----------
+    function rebuildInitEditor() {
+        state.gridX = Math.max(3, parseInt(gridXEl.value,10) || 50);
+        state.gridY = Math.max(3, parseInt(gridYEl.value,10) || 30);
+        fitCanvasToGrid(initCanvas, state.gridX, state.gridY, true);
+        // redraw from textarea
+        drawPoints(initCanvas, state.gridX, state.gridY, parsePointsFromTextarea());
+    }
+
+    provideInitEl.addEventListener('change', ()=>{
+        initEditorEl.style.display = provideInitEl.checked ? '' : 'none';
+        if (provideInitEl.checked) rebuildInitEditor();
+    });
+
+    gridXEl.addEventListener('change', rebuildInitEditor);
+    gridYEl.addEventListener('change', rebuildInitEditor);
+
+    clearInitBtn.addEventListener('click', ()=>{
+        initEditorEl._points = new Set();
+        coordsTextarea.value = '';
+        drawPoints(initCanvas, state.gridX, state.gridY, []);
+    });
+
+    invertInitBtn.addEventListener('click', ()=>{
+        // naive invert: fill everything not alive up to 2k cells threshold to avoid browser freeze
+        const maxCells = Math.min(2000, state.gridX*state.gridY);
+        const alive = new Set((initEditorEl._points ? Array.from(initEditorEl._points) : []).slice(0,maxCells));
+        const res = [];
+        for (let y=0; y<state.gridY && res.length<maxCells; y++) {
+            for (let x=0; x<state.gridX && res.length<maxCells; x++) {
+                const key=`${x},${y}`;
+                if (!alive.has(key)) res.push({X:x,Y:y});
+            }
+        }
+        coordsTextarea.value = res.map(p=>`${p.X},${p.Y}`).join('\n');
+        initEditorEl._points = new Set(res.map(p=>`${p.X},${p.Y}`));
+        drawPoints(initCanvas, state.gridX, state.gridY, res);
+    });
+
+    initCanvas.addEventListener('click', (e)=>{
+        const rect = initCanvas.getBoundingClientRect();
+        const x = Math.floor((e.clientX - rect.left) / (rect.width / state.gridX));
+        const y = Math.floor((e.clientY - rect.top) / (rect.height / state.gridY));
+        togglePointInEditor(x,y);
+    });
+
+    // ---------- Board canvas setup ----------
+    function setupBoardCanvas() {
+        fitCanvasToGrid(boardCanvas, state.gridX, state.gridY, false);
+        drawPoints(boardCanvas, state.gridX, state.gridY, []);
+    }
+
+    // ---------- WS & session ----------
+    async function tryHttpInit(url, payload) {
+        // Best-effort POST. If backend returns 200/204 we proceed; if 405/404, we ignore.
+        try {
+            const res = await fetch(url, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) return true;
+        } catch (e) {}
+        return false;
+    }
+
+    function connectAndRun(initPayload) {
+        resetStateForNewSession();
+        setupBoardCanvas();
+        setStatus(false);
+
+        const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl = `${scheme}://${location.host}/api/points`;
+        const ws = new WebSocket(wsUrl);
+        state.ws = ws;
+
+        ws.addEventListener('open', ()=>{
+            setStatus(true);
+            // send init over WS (backend likely expects this)
+            ws.send(JSON.stringify(initPayload));
+            // Draw initial immediately on client too
+            if (initPayload.Points?.length) {
+                cachePut(1, initPayload.Points);
+                state.latestGen = 1; state.currentGen = 1;
+                drawPoints(boardCanvas, state.gridX, state.gridY, initPayload.Points);
+                updateBadges();
+            }
+            setButtonsEnabled(true);
+            playBtn.disabled = true; // we'll auto start once first WS message arrives
+            pauseBtn.disabled = false;
+            // Kick off autoplay after server confirms first state
+            startAutoplay();
+        });
+
+        ws.addEventListener('message', (ev)=>{
+            // Server may send either {Points:[{X,Y},...]} or just an array of points
+            let data;
+            try { data = JSON.parse(ev.data); } catch { data = null; }
+            let points = [];
+            if (Array.isArray(data)) points = data;
+            else if (data && Array.isArray(data.Points)) points = data.Points;
+            else { console.warn('Unexpected message', ev.data); state.requestedPending=false; return; }
+
+            // Determine generation number: if we requested 'next', it's latestGen+1; if we requested N, we don't know which; try to infer
+            let gen = state.latestGen + 1;
+            // Heuristic: if cache doesn't have gen and message size equals an existing N we asked for via goto, allow override via a marker
+            if (state._pendingGotoGen) { gen = state._pendingGotoGen; state._pendingGotoGen = null; }
+
+            cachePut(gen, points);
+            state.latestGen = Math.max(state.latestGen, gen);
+            state.currentGen = gen;
+            drawPoints(boardCanvas, state.gridX, state.gridY, points);
+            updateBadges();
+            state.requestedPending = false;
+        });
+
+        ws.addEventListener('close', ()=>{ setStatus(false); pauseAutoplay(); });
+        ws.addEventListener('error', ()=>{ setStatus(false); pauseAutoplay(); });
+    }
+
+    // ---------- UI events ----------
+    startBtn.addEventListener('click', async ()=>{
+        state.gridX = Math.max(3, parseInt(gridXEl.value,10) || 50);
+        state.gridY = Math.max(3, parseInt(gridYEl.value,10) || 30);
+        const initPoints = getInitialPoints();
+        const payload = { GridSizeX: state.gridX, GridSizeY: state.gridY, Points: initPoints };
+
+        setupBoardCanvas();
+
+        // optimistic draw initial if provided
+        if (initPoints.length) {
+            drawPoints(boardCanvas, state.gridX, state.gridY, initPoints);
+            genTag.textContent = 'Gen: 1 (pending)';
+            sizeTag.textContent = `Size: ${state.gridX}×${state.gridY}`;
+        }
+
+        // Best-effort HTTP init, then WS connect
+        await tryHttpInit('/api/points', payload);
+        connectAndRun(payload);
+    });
+
+    playBtn.addEventListener('click', ()=> startAutoplay());
+    pauseBtn.addEventListener('click', ()=> pauseAutoplay());
+
+    prevBtn.addEventListener('click', ()=>{
+        if (state.currentGen <= 1) return;
+        pauseAutoplay();
+        const target = state.currentGen - 1;
+        if (!showGeneration(target)) {
+            // not in cache — request from server
+            state._pendingGotoGen = target;
+            requestNth(target);
+        }
+    });
+
+    nextBtn.addEventListener('click', ()=>{
+        pauseAutoplay();
+        const target = state.currentGen + 1;
+        if (state.cache.has(target)) { showGeneration(target); }
+        else { requestNext(); }
+    });
+
+    speedInput.addEventListener('change', ()=>{
+        state.speedMs = Math.max(50, Number(speedInput.value)||250);
+        if (state.running) startAutoplay(); // restart interval
+    });
+
+    gotoBtn.addEventListener('click', ()=>{
+        const n = Number(gotoInput.value);
+        if (!Number.isInteger(n) || n < 1) return;
+        pauseAutoplay();
+        if (!showGeneration(n)) {
+            state._pendingGotoGen = n;
+            requestNth(n);
+        }
+    });
+
+    // Enable goto as soon as we have a session
+    const observer = new MutationObserver(()=>{
+        const connected = wsStatus.querySelector('.status-dot').classList.contains('ok');
+        gotoBtn.disabled = !connected;
+    });
+    observer.observe(wsStatus, {attributes:true, subtree:true});
+
+    // initial setup
+    updateBadges();
+    setupBoardCanvas();
+</script>
+</body>
+</html>
+</title>
+</head>
+<body>
+
+</body>
+</html>

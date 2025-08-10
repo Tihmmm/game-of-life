@@ -1,9 +1,10 @@
 package game
 
 import (
-	"github.com/tihmmm/game-of-life/set"
 	"log"
 	"slices"
+
+	"github.com/tihmmm/game-of-life/set"
 )
 
 type Game struct {
@@ -13,7 +14,7 @@ type Game struct {
 	Board       *set.Set
 }
 
-func NewGameWithNGenerations(initialState []set.Point, gridSizeX, gridSizeY, generationsNum int) *Game {
+func NewGame(initialState []set.Point, gridSizeX, gridSizeY int) Game {
 	game := Game{
 		GridSizeX: gridSizeX,
 		GridSizeY: gridSizeY,
@@ -31,24 +32,24 @@ func NewGameWithNGenerations(initialState []set.Point, gridSizeX, gridSizeY, gen
 
 	log.Printf("board:%dx%d\ninitial state:\n%v\n", gridSizeX, gridSizeY, game.Generations[0])
 
-	game.NextNGens(generationsNum, &game.Generations[0], game.Board)
-
-	return &game
+	return game
 }
 
-func (g *Game) NextNGens(n int, currentGen, board *set.Set) {
-	gen := &set.Set{Points: currentGen.Points}
-	for range n {
-		gen = g.NextGen(gen, board)
-	}
-}
-
-func (g *Game) NextGen(currentGen, board *set.Set) *set.Set {
-	survivingPoints := GetSurvivingPoints(currentGen, board)
-	currentGen = &set.Set{Points: survivingPoints}
-	g.Generations = append(g.Generations, *currentGen)
+func (g *Game) NextGen() set.Set {
+	currentGen := g.GetLastGen()
+	survivingPoints := GetSurvivingPoints(&currentGen, g.Board)
+	currentGen = set.Set{Points: survivingPoints}
+	g.Generations = append(g.Generations, currentGen)
 
 	return currentGen
+}
+
+func (g *Game) GetNthGeneration(n int) *set.Set {
+	return &g.Generations[n]
+}
+
+func (g *Game) GetLastGen() set.Set {
+	return g.Generations[len(g.Generations)-1]
 }
 
 func GetSurvivingPoints(currentGen, board *set.Set) []set.Point {

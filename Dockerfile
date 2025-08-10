@@ -4,7 +4,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 FROM dependencies AS build
-COPY . ./
+COPY backend ./
 RUN CGO_ENABLED=0 go build -o /gol-backend -ldflags="-w -s" ./cmd/app/
 
 FROM tihmmm/golang-alpine-rootless:go-1.22.0-alp-3.19
