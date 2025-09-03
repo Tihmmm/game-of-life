@@ -423,7 +423,7 @@
         state.gridX = Math.max(3, parseInt(gridXEl.value,10) || 50);
         state.gridY = Math.max(3, parseInt(gridYEl.value,10) || 30);
         const initPoints = getInitialPoints();
-        const payload = { GridSizeX: state.gridX, GridSizeY: state.gridY, Points: initPoints };
+        const payload = { GridSizeX: state.gridX, GridSizeY: state.gridY, InitialPoints: initPoints };
 
         setupBoardCanvas();
 
