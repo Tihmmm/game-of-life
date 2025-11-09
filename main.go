@@ -12,9 +12,10 @@ import (
 )
 
 type Req struct {
-	GridSizeX     int
-	GridSizeY     int
-	InitialPoints []set.Point
+	IsDeterministic bool
+	GridSizeX       int
+	GridSizeY       int
+	InitialPoints   []set.Point
 }
 
 var upgrader = websocket.Upgrader{
@@ -37,6 +38,7 @@ func main() {
 			http.Error(w, "websocket upgrade failed", http.StatusBadRequest)
 			return
 		}
+		//defer conn.Close()
 
 		var cfg Req
 		if _, msg, err := conn.ReadMessage(); err == nil && len(msg) > 0 && msg[0] == '{' {
@@ -50,7 +52,8 @@ func main() {
 			cfg.GridSizeY = 10
 		}
 
-		g := game.NewGame(cfg.InitialPoints, cfg.GridSizeX, cfg.GridSizeY)
+		g := game.NewGame(cfg.InitialPoints, cfg.GridSizeX, cfg.GridSizeY, cfg.IsDeterministic)
+		log.Printf("board:%dx%d\ninitial state:\n%v\nIs determenistic: %t", g.GridSizeX, g.GridSizeY, g.Generations[0], g.IsDeterministic)
 
 		if err := conn.WriteJSON(g); err != nil {
 			log.Printf("Error writing JSON: %v\n", err)

@@ -1,36 +1,37 @@
 package game
 
 import (
-	"log"
+	"fmt"
+	"math/rand"
 	"slices"
 
 	"github.com/tihmmm/game-of-life/set"
 )
 
 type Game struct {
-	Generations []set.Set
-	GridSizeX   int
-	GridSizeY   int
-	Board       *set.Set
+	IsDeterministic bool
+	GridSizeX       int
+	GridSizeY       int
+	Generations     []set.Set
+	Board           *set.Set
 }
 
-func NewGame(initialState []set.Point, gridSizeX, gridSizeY int) Game {
+func NewGame(initialState []set.Point, gridSizeX, gridSizeY int, isDeterministic bool) Game {
 	game := Game{
-		GridSizeX: gridSizeX,
-		GridSizeY: gridSizeY,
+		IsDeterministic: isDeterministic,
+		GridSizeX:       gridSizeX,
+		GridSizeY:       gridSizeY,
 	}
 
 	n, m := uint(gridSizeX), uint(gridSizeY)
 	game.Board = set.NewZNByM(n, m)
 
-	if initialState == nil {
+	if initialState == nil || len(initialState) == 0 {
 		in := set.NewZSubsetRand(n, m)
 		game.Generations = append(game.Generations, in)
 	} else {
 		game.Generations = append(game.Generations, set.Set{Points: initialState})
 	}
-
-	log.Printf("board:%dx%d\ninitial state:\n%v\n", gridSizeX, gridSizeY, game.Generations[0])
 
 	return game
 }
@@ -39,6 +40,10 @@ func (g *Game) NextGen() set.Set {
 	currentGen := g.GetLastGen()
 	survivingPoints := GetSurvivingPoints(&currentGen, g.Board)
 	currentGen = set.Set{Points: survivingPoints}
+	if !g.IsDeterministic {
+		deleteRandomPoints(-1, &currentGen)
+	}
+
 	g.Generations = append(g.Generations, currentGen)
 
 	return currentGen
@@ -72,4 +77,28 @@ func GetSurvivingPoints(currentGen, board *set.Set) []set.Point {
 	}
 
 	return survivingPoints
+}
+
+// deleteRandomPoints deletes random n points from s.
+// If n < 0, n is generated randomly.
+// Returns the number of deleted points and an error
+func deleteRandomPoints(n int, s *set.Set) (int, error) {
+	if len(s.Points) <= 1 {
+		return 0, nil
+	}
+
+	if n > len(s.Points) {
+		return n, fmt.Errorf("points out of range")
+	} else if n < 0 {
+		n = rand.Intn(len(s.Points) - 1)
+	}
+
+	for range n {
+		i := rand.Intn(len(s.Points))
+		// remove element from Points slice at index i
+		s.Points[i] = s.Points[len(s.Points)-1]
+		s.Points = s.Points[:len(s.Points)-1]
+	}
+
+	return n, nil
 }

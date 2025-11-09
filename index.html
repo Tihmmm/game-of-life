@@ -59,6 +59,11 @@
             <span class="hint">If unchecked, backend should randomize.</span>
         </div>
 
+        <div style="margin-top:12px" class="row">
+            <label style="margin:0" class="row"><input id="IsDeterministic" type="checkbox"/>&nbsp;Deterministic</label>
+            <span class="hint">If unchecked, random cells may die in each generation.</span>
+        </div>
+
         <div id="initEditor" style="display:none;margin-top:12px">
             <div class="row">
                 <button class="btn ghost" id="clearInit">Clear</button>
@@ -101,12 +106,6 @@
             <canvas id="boardCanvas"></canvas>
         </div>
     </div>
-
-    <p class="hint">Notes:
-        <br>• This UI tries <span class="kbd">POST /api/points</span> first. If the backend rejects it, it falls back to initializing over WebSocket <span class="kbd">GET /api/points</span> and sending the init JSON as the first WS message.
-        <br>• Messages sent over WS: <span class="kbd">"next"</span> for next generation; an integer <span class="kbd">"N"</span> to request the Nth generation from the backend if it exists server-side.
-        <br>• Frontend keeps a cache of the last 100 generations; <span class="kbd">Prev</span> and <span class="kbd">Go</span> use the cache when possible.
-    </p>
 </div>
 
 <script>
@@ -130,6 +129,7 @@
     };
 
     // ---------- DOM ----------
+    const isDeterministic = document.getElementById('IsDeterministic');
     const gridXEl = document.getElementById('gridX');
     const gridYEl = document.getElementById('gridY');
     const provideInitEl = document.getElementById('provideInit');
@@ -393,7 +393,6 @@
         });
 
         ws.addEventListener('message', (ev)=>{
-            // Server may send either {Points:[{X,Y},...]} or just an array of points
             let data;
             try { data = JSON.parse(ev.data); } catch { data = null; }
             let points = [];
@@ -423,7 +422,7 @@
         state.gridX = Math.max(3, parseInt(gridXEl.value,10) || 50);
         state.gridY = Math.max(3, parseInt(gridYEl.value,10) || 30);
         const initPoints = getInitialPoints();
-        const payload = { GridSizeX: state.gridX, GridSizeY: state.gridY, InitialPoints: initPoints };
+        const payload = { IsDeterministic: isDeterministic.checked, GridSizeX: state.gridX, GridSizeY: state.gridY, InitialPoints: initPoints };
 
         setupBoardCanvas();
 
